@@ -122,6 +122,26 @@ local void* MapExecutableMemory(void* Code, usize Size)
     return (void*)(ExecutableBase);
 }
 
+local void UnmapExecutableMemory(void* Memory, usize Size)
+{
+    s32 UnmapResult = 0;
+
+    __asm__ volatile (
+        "syscall" :
+        "=a"(UnmapResult) :
+        "a"(11), // NOTE(vak): munmap syscall
+        "D"(Memory),
+        "S"(Size) :
+        "memory", "rcx", "r11"
+    );
+
+    if (UnmapResult < 0)
+    {
+        Println(Str("Failed to unmap executable memory"));
+        Exit(1);
+    }
+}
+
 local void* LinuxMemoryBase = 0;
 local usize LinuxMemoryUsed = 0;
 local usize LinuxMemoryCommited = 0;
@@ -210,6 +230,11 @@ local void LinuxMoreMemory(usize Size)
     }
 }
 
+local void ResetMemory(void)
+{
+    LinuxMemoryUsed = 0;
+}
+
 local void* Allocate(usize Size)
 {
     if (!LinuxMemoryBase)
@@ -228,6 +253,7 @@ local void* Allocate(usize Size)
 #include "parser.c"
 #include "generator.c"
 #include "disassembler.c"
+#include "evaluator.c"
 
 local void PrintNode(node* Node)
 {
@@ -258,16 +284,28 @@ local void PrintNode(node* Node)
         case NodeKind_Mul:
         case NodeKind_Div:
         case NodeKind_Mod:
+        case NodeKind_Equal:
+        case NodeKind_NotEqual:
+        case NodeKind_Less:
+        case NodeKind_Greater:
+        case NodeKind_LessEqual:
+        case NodeKind_GreaterEqual:
         {
             switch (Node->Kind)
             {
                 default: {} break;
 
-                case NodeKind_Add: Println(Str("Add:")); break;
-                case NodeKind_Sub: Println(Str("Sub:")); break;
-                case NodeKind_Mul: Println(Str("Mul:")); break;
-                case NodeKind_Div: Println(Str("Div:")); break;
-                case NodeKind_Mod: Println(Str("Mod:")); break;
+                case NodeKind_Add:          Println(Str("Add:")); break;
+                case NodeKind_Sub:          Println(Str("Sub:")); break;
+                case NodeKind_Mul:          Println(Str("Mul:")); break;
+                case NodeKind_Div:          Println(Str("Div:")); break;
+                case NodeKind_Mod:          Println(Str("Mod:")); break;
+                case NodeKind_Equal:        Println(Str("Equal:")); break;
+                case NodeKind_NotEqual:     Println(Str("NotEqual:")); break;
+                case NodeKind_Less:         Println(Str("Less:")); break;
+                case NodeKind_Greater:      Println(Str("Greater:")); break;
+                case NodeKind_LessEqual:    Println(Str("LessEqual:")); break;
+                case NodeKind_GreaterEqual: Println(Str("GreaterEqual:")); break;
             }
 
             Level++;
@@ -282,10 +320,9 @@ local void PrintNode(node* Node)
 
 typedef ssize program_entry(void);
 
-__attribute__((force_align_arg_pointer))
-void LinuxEntry(void)
+local ssize CompileAndRunDetailed(string Code)
 {
-    string Code = Str("10 - 5");
+    ResetMemory();
 
     token_stream TokenStream    = MakeTokenStream(Code);
     node* RootNode              = Parse(&TokenStream);
@@ -319,6 +356,131 @@ void LinuxEntry(void)
     Println(Str("============================================================================================"));
 
     Print(Str("\n"));
+
+    UnmapExecutableMemory((void*)ProgramEntry, Generated.Size);
+    ResetMemory();
+
+    return (ProgramResult);
+}
+
+local ssize CompileAndRun(string Code)
+{
+    ResetMemory();
+
+    token_stream TokenStream    = MakeTokenStream(Code);
+    node* RootNode              = Parse(&TokenStream);
+    generated Generated         = Generate(RootNode);
+
+    program_entry* ProgramEntry = (program_entry*)
+        MapExecutableMemory(Generated.Code, Generated.Size);
+
+    ssize ProgramResult = ProgramEntry();
+
+    UnmapExecutableMemory((void*)ProgramEntry, Generated.Size);
+
+    ResetMemory();
+
+    return (ProgramResult);
+}
+
+local ssize ParseAndEvaluate(string Code)
+{
+    ResetMemory();
+
+    token_stream TokenStream    = MakeTokenStream(Code);
+    node* RootNode              = Parse(&TokenStream);
+
+    ssize Result = Evaluate(RootNode);
+
+    ResetMemory();
+
+    return (Result);
+}
+
+typedef struct
+{
+    ssize Expected;
+    string Code;
+} test_case;
+
+__attribute__((force_align_arg_pointer))
+void LinuxEntry(void)
+{
+    persist test_case TestCases[] =
+    {
+        { 2,            StaticStr("1 + 1") },
+        { 36,           StaticStr("1 + 5 * 7") },
+        { 33,           StaticStr("8*4 + 2*3 / 5") },
+        { 1800,         StaticStr("120 / 2*(10 + 20)") },
+        { 2,            StaticStr("120 / 2*(10 + 20 - 5) % 7") },
+        { 1,            StaticStr("1 / 1 == 1 + 1 % 1 - 1 + 1") },
+        { 1,            StaticStr("3 != 10 + 10") },
+        { 1,            StaticStr("100 - 2*2*2*2*2*2 + 2*16 - 2*24 == 10 + 10*(2 >= 10 - 9)") },
+        { 0,            StaticStr("1 + 1 >= 1 * 3") },
+        { 1,            StaticStr("1 + 1 == 2 * 1200 - 2398") },
+        { 0,            StaticStr("1 + 2 + 3 + 4 + 5 + 6 >= 50 * 10 - 500 + 50 + 5") },
+        { 1,            StaticStr("120 / 2 >= 50 == 10 * 20 - 199") },
+        { 10,           StaticStr("(1 == 3) + 9 + (120/2*(10+20)<=1800)") },
+        { -370,         StaticStr("180 / 3*(9 - 4*(6/8) + 1 + 1 + 1 + 1) + 100 * 3 / (13 % 7) - 1200") },
+        { 287,          StaticStr("1 + 4 + 7 + 10 + 13 + 16 + 19 + 22 + 25 + 28 + 31 + 34 + 37 + 40") },
+        { 38107,        StaticStr(" (((57 - 98) * 1) - 63 + 80 * 34 * 14 + 67) - 17 * (39 / 81 - 24 + 91) + 71 + 27 - 70 - (28 * 15 - (15 + 49)) / 75 * 54 + 23 + 16 * (42 + 7 * 37) + (77 / 94) + 65 * 54 - 11 / 7 / (25 / (1 + 40 / 61 / 52 * 41 - 8 + 16 + ((33 / 33 + 79 * (55 / 63)))) - (((55 * 13) + (98 - 32 + (65))) + ((70 + ((60 * 99) + 4) - 75) - 75 + 17 + (70 * 88))) / (33 + 44) * 42) - (71 * 98 + 66 * (66 / 83 / 68)) + ((94 - 59 + 91 - 91 / (57) + 39 * 80) * 95 / 86 * ((27 * 94 + 75) / 84 / 91 / 43))") },
+        { -4855,        StaticStr("(((((42 - 87 + (99 / 94))) - (((21 * 15) + 92 - 87) - (93 * (23 - 71))))) - ((((9 - 16 - 19) + 63)) * (((((76 / 80) / 37 / 22) * 66)) / (85 + 82))) + ((((98 * 39 / 26) - 31) / (((20 / 42) * 41) - ((44 * (13 + 25 - 5)) / (37 * (86 / 4 + 15)) - 68) * (((58 * 23) + (35 / 34)) * (((((38)) + 55)) - 25 + 21 - 44) + 32 * (((21 - 86) - (29 / 91)) + (71 / 99))))) - 27))") },
+        { -1806,        StaticStr("(((((53))) - 26 - 11 * 31 - (80 - 11 + 73)) + ((15 * 50) - 50 * (42)))") },
+        { 2715,         StaticStr("(((((34 * 80) - (6)) - 13 - 3) + 17) + ((94 / 58 - 45 * (37 / 83) + 70 / 65 / 24) / ((((41) - (5 * 99) * 72) + ((23 + 70) * ((78 - 33))))) - ((3) / 23)))") },
+        { 284403643073, StaticStr("(((((86 / 58) * ((61 / 11) + (40 * (44 * 4) * ((19 * 13 + 76) - (17 + 93))))) / 1 / 59) * ((43 / 61) - 85) / ((11 - 42) - 48) + ((8 * (((75 + (62 + 59)) - (19 / ((47 * 98) - 87))) - 23)) * ((97 / (70 - (79 * 6)) + ((30 + 37 * (42 * (46 * ((84 / 84 + 9) + (83 * 81))))) / 89 * 38)) - (7 + 5) * (((93 - 43) * (84)) / 12 / 52 * 79)))) + (80 / 64 / (97 - (28 + 80))))") },
+    };
+
+#if 0
+    PrintSSize(ParseAndEvaluate(TestCases[19].Code));
+    PrintCharacter('\n');
+#else
+    usize CasesPassed = 0;
+
+    PrintCharacter('\n');
+
+    for (usize Index = 0; Index < ArrayCount(TestCases); Index++)
+    {
+        test_case* Case = TestCases + Index;
+
+        ssize RunResult = CompileAndRun(Case->Code);
+
+        {
+            usize SoFar = 0;
+
+            SoFar += Print(Str("["));
+            SoFar += PrintUSize(Index);
+            SoFar += Print(Str("]:"));
+
+            usize Pad = 8;
+            for (; SoFar < Pad; SoFar++)
+                PrintCharacter(' ');
+        }
+
+        if (RunResult != Case->Expected)
+        {
+            Print(Str("\033[31mFAILED\033[39m"));
+            Print(Str(": '"));
+            Print(Case->Code);
+            Print(Str("'\n"));
+        }
+        else
+        {
+            Print(Str("\033[32mPASSED\033[39m"));
+            Print(Str(": '"));
+            Print(Case->Code);
+            Print(Str("'\n"));
+            CasesPassed++;
+        }
+    }
+
+    Print(Str("Cases passed: "));
+    PrintUSize(CasesPassed);
+    Print(Str("/"));
+    PrintUSize(ArrayCount(TestCases));
+    PrintCharacter('\n');
+
+    PrintCharacter('\n');
+#endif
 
     Exit(0);
 }

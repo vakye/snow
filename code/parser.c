@@ -6,11 +6,20 @@ typedef enum
     NodeKind_Nil = 0,
 
     NodeKind_Integer,
+
     NodeKind_Add,
     NodeKind_Sub,
     NodeKind_Mul,
     NodeKind_Div,
     NodeKind_Mod,
+
+    NodeKind_Equal,
+    NodeKind_NotEqual,
+
+    NodeKind_Less,
+    NodeKind_Greater,
+    NodeKind_LessEqual,
+    NodeKind_GreaterEqual,
 } node_kind;
 
 typedef struct node node;
@@ -23,6 +32,8 @@ struct node
 };
 
 local node* ParseExpression (token_stream* Stream);
+local node* ParseEquality   (token_stream* Stream);
+local node* ParseComparison (token_stream* Stream);
 local node* ParseSum        (token_stream* Stream);
 local node* ParseFactor     (token_stream* Stream);
 local node* ParsePrimary    (token_stream* Stream);
@@ -64,7 +75,61 @@ local node* MakeIntegerNode(usize Integer)
 
 local node* ParseExpression(token_stream* Stream)
 {
+    node* Node = ParseEquality(Stream);
+    return (Node);
+}
+
+local node* ParseEquality(token_stream* Stream)
+{
+    node* Node = ParseComparison(Stream);
+
+    for (;;)
+    {
+        if (MatchAndNextToken(Stream, TokenKind_DoubleEqual))
+        {
+            Node = MakeBinaryNode(NodeKind_Equal, Node, ParseComparison(Stream));
+        }
+        else if (MatchAndNextToken(Stream, TokenKind_ExclamEqual))
+        {
+            Node = MakeBinaryNode(NodeKind_NotEqual, Node, ParseComparison(Stream));
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    return (Node);
+}
+
+local node* ParseComparison(token_stream* Stream)
+{
     node* Node = ParseSum(Stream);
+
+    for (;;)
+    {
+            if (MatchAndNextToken(Stream, '<'))
+            {
+                Node = MakeBinaryNode(NodeKind_Less, Node, ParseSum(Stream));
+            }
+            else if (MatchAndNextToken(Stream, '>'))
+            {
+                Node = MakeBinaryNode(NodeKind_Greater, Node, ParseSum(Stream));
+            }
+            else if (MatchAndNextToken(Stream, TokenKind_LessEqual))
+            {
+                Node = MakeBinaryNode(NodeKind_LessEqual, Node, ParseSum(Stream));
+            }
+            else if (MatchAndNextToken(Stream, TokenKind_GreaterEqual))
+            {
+                Node = MakeBinaryNode(NodeKind_GreaterEqual, Node, ParseSum(Stream));
+            }
+            else
+            {
+                break;
+            }
+    }
+
     return (Node);
 }
 

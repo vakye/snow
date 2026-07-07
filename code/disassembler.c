@@ -41,6 +41,66 @@ local void Disassemble(void* Data, usize Size)
     u8* Bytes = (u8*)Data;
     usize Index = 0;
 
+    persist string RegisterNames8_NO_REX[] =
+    {
+        StaticStr("al"),
+        StaticStr("cl"),
+        StaticStr("dl"),
+        StaticStr("bl"),
+        StaticStr("ah"),
+        StaticStr("ch"),
+        StaticStr("dh"),
+        StaticStr("bh"),
+        StaticStr("r8l"),
+        StaticStr("r9l"),
+        StaticStr("r10l"),
+        StaticStr("r11l"),
+        StaticStr("r12l"),
+        StaticStr("r13l"),
+        StaticStr("r14l"),
+        StaticStr("r15l"),
+    };
+
+    persist string RegisterNames8_REX[] =
+    {
+        StaticStr("al"),
+        StaticStr("cl"),
+        StaticStr("dl"),
+        StaticStr("bl"),
+        StaticStr("spl"),
+        StaticStr("bpl"),
+        StaticStr("sil"),
+        StaticStr("dil"),
+        StaticStr("r8l"),
+        StaticStr("r9l"),
+        StaticStr("r10l"),
+        StaticStr("r11l"),
+        StaticStr("r12l"),
+        StaticStr("r13l"),
+        StaticStr("r14l"),
+        StaticStr("r15l"),
+    };
+
+    persist string RegisterNames16[] =
+    {
+        StaticStr("ax"),
+        StaticStr("cx"),
+        StaticStr("dx"),
+        StaticStr("bx"),
+        StaticStr("sp"),
+        StaticStr("bp"),
+        StaticStr("si"),
+        StaticStr("di"),
+        StaticStr("r8w"),
+        StaticStr("r9w"),
+        StaticStr("r10w"),
+        StaticStr("r11w"),
+        StaticStr("r12w"),
+        StaticStr("r13w"),
+        StaticStr("r14w"),
+        StaticStr("r15w"),
+    };
+
     persist string RegisterNames32[] =
     {
         StaticStr("eax"),
@@ -238,6 +298,31 @@ local void Disassemble(void* Data, usize Size)
             Print(RegisterNameMap[Source]);
             PrintCharacter('\n');
         }
+        else if (Byte == 0x3b)
+        {
+            Index++;
+            if (Index == Size)
+            {
+                Println(Str("Expected MODRM after CMP"));
+                Exit(1);
+            }
+
+            u8 ModRM = Bytes[Index];
+            Index++;
+
+            OutputInstructionHex(Data, StartIndex, Index);
+
+            u8 Dest   = REX_R*8 + ((ModRM >> 3) & 0x7);
+            u8 Source = REX_B*8 + ((ModRM >> 0) & 0x7);
+
+            string* RegisterNameMap = (REX_W) ? RegisterNames64 : RegisterNames32;
+
+            PadInstruction(Print(Str("cmp ")));
+            Print(RegisterNameMap[Dest]);
+            Print(Str(", "));
+            Print(RegisterNameMap[Source]);
+            PrintCharacter('\n');
+        }
         else if (Byte == 0x99)
         {
             Index++;
@@ -288,13 +373,86 @@ local void Disassemble(void* Data, usize Size)
                 Print(RegisterNameMap[Source]);
                 PrintCharacter('\n');
             }
+            else if ((Byte >= 0x90) && (Byte <= 0x9F))
+            {
+                persist string Instruction[16] =
+                {
+                    StaticStr("seto"),
+                    StaticStr("setno"),
+                    StaticStr("setb"),
+                    StaticStr("setae"),
+                    StaticStr("setz"),
+                    StaticStr("setnz"),
+                    StaticStr("setbe"),
+                    StaticStr("seta"),
+                    StaticStr("sets"),
+                    StaticStr("setns"),
+                    StaticStr("setp"),
+                    StaticStr("setnp"),
+                    StaticStr("setl"),
+                    StaticStr("setnl"),
+                    StaticStr("setle"),
+                    StaticStr("setg"),
+                };
+
+                Index++;
+                if (Index == Size)
+                {
+                    Println(Str("Expected MODRM after SETcc"));
+                    Exit(1);
+                }
+
+                u8 ModRM = Bytes[Index];
+                Index++;
+
+                OutputInstructionHex(Data, StartIndex, Index);
+
+                u8 Dest = REX_R*8 + ((ModRM >> 0) & 0x7);
+
+                string* RegisterNameMap = (REX) ? RegisterNames8_REX : RegisterNames8_NO_REX;
+
+                PadInstruction(Print(Instruction[Byte - 0x90]));
+                Print(RegisterNameMap[Dest]);
+                PrintCharacter('\n');
+            }
+            else if (Byte == 0xB6)
+            {
+                Index++;
+                if (Index == Size)
+                {
+                    Println(Str("Expected MODRM after SETcc"));
+                    Exit(1);
+                }
+
+                u8 ModRM = Bytes[Index];
+                Index++;
+
+                OutputInstructionHex(Data, StartIndex, Index);
+
+                u8 Dest   = REX_R*8 + ((ModRM >> 3) & 0x7);
+                u8 Source = REX_B*8 + ((ModRM >> 0) & 0x7);
+
+                string* DestNameMap = (REX_W) ? RegisterNames64 : RegisterNames32;
+                string* SourceNameMap = (REX) ? RegisterNames8_REX : RegisterNames8_NO_REX;
+
+                PadInstruction(Print(Str("movzx ")));
+                Print(DestNameMap[Dest]);
+                Print(Str(", "));
+                Print(SourceNameMap[Source]);
+                PrintCharacter('\n');
+            }
+            else
+            {
+                Println(Str("Expected valid opcode after 0x0F"));
+                Exit(1);
+            }
         }
         else if (Byte == 0xF7)
         {
             Index++;
             if (Index == Size)
             {
-                Println(Str("Expected MODRM after IMUL"));
+                Println(Str("Expected MODRM after IDIV"));
                 Exit(1);
             }
 

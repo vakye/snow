@@ -4,6 +4,8 @@
 #define local static
 #define persist static
 
+#define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
+
 #define KB(Amount) ((ssize)(Amount) << 10)
 #define MB(Amount) ((ssize)(Amount) << 20)
 #define GB(Amount) ((ssize)(Amount) << 30)
