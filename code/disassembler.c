@@ -478,6 +478,120 @@ local void Disassemble(void* Data, usize Size)
                 Exit(1);
             }
         }
+        else if (Byte == 0xd3)
+        {
+            Index++;
+            if (Index == Size)
+            {
+                Println(Str("Expected MODRM after IDIV"));
+                Exit(1);
+            }
+
+            u8 ModRM = Bytes[Index];
+            Index++;
+
+            OutputInstructionHex(Data, StartIndex, Index);
+
+            u8 Select = ((ModRM >> 3) & 0x7);
+            u8 Dest = REX_B*8 + ((ModRM >> 0) & 0x7);
+
+            string* RegisterNameMap = (REX_W) ? RegisterNames64 : RegisterNames32;
+
+            if (Select == 4)
+            {
+                PadInstruction(Print(Str("sal ")));
+                Print(RegisterNameMap[Dest]);
+                Print(Str(", cl"));
+                PrintCharacter('\n');
+            }
+            else if (Select == 7)
+            {
+                PadInstruction(Print(Str("sar ")));
+                Print(RegisterNameMap[Dest]);
+                Print(Str(", cl"));
+                PrintCharacter('\n');
+            }
+            else
+            {
+                Println(Str("Unknown select for opcode 0xd3"));
+                Exit(1);
+            }
+        }
+        else if (Byte == 0x23)
+        {
+            Index++;
+            if (Index == Size)
+            {
+                Println(Str("Expected MODRM after AND"));
+                Exit(1);
+            }
+
+            u8 ModRM = Bytes[Index];
+            Index++;
+
+            OutputInstructionHex(Data, StartIndex, Index);
+
+            u8 Dest   = REX_R*8 + ((ModRM >> 3) & 0x7);
+            u8 Source = REX_B*8 + ((ModRM >> 0) & 0x7);
+
+            string* RegisterNameMap = (REX_W) ? RegisterNames64 : RegisterNames32;
+
+            PadInstruction(Print(Str("and ")));
+            Print(RegisterNameMap[Dest]);
+            Print(Str(", "));
+            Print(RegisterNameMap[Source]);
+            PrintCharacter('\n');
+        }
+        else if (Byte == 0x0b)
+        {
+            Index++;
+            if (Index == Size)
+            {
+                Println(Str("Expected MODRM after OR"));
+                Exit(1);
+            }
+
+            u8 ModRM = Bytes[Index];
+            Index++;
+
+            OutputInstructionHex(Data, StartIndex, Index);
+
+            u8 Dest   = REX_R*8 + ((ModRM >> 3) & 0x7);
+            u8 Source = REX_B*8 + ((ModRM >> 0) & 0x7);
+
+            string* RegisterNameMap = (REX_W) ? RegisterNames64 : RegisterNames32;
+
+            PadInstruction(Print(Str("or ")));
+            Print(RegisterNameMap[Dest]);
+            Print(Str(", "));
+            Print(RegisterNameMap[Source]);
+            PrintCharacter('\n');
+        }
+        else if (Byte == 0x33)
+        {
+            Index++;
+            if (Index == Size)
+            {
+                Println(Str("Expected MODRM after XOR"));
+                Exit(1);
+            }
+
+            u8 ModRM = Bytes[Index];
+            Index++;
+
+            OutputInstructionHex(Data, StartIndex, Index);
+
+            u8 Dest   = REX_R*8 + ((ModRM >> 3) & 0x7);
+            u8 Source = REX_B*8 + ((ModRM >> 0) & 0x7);
+
+            string* RegisterNameMap = (REX_W) ? RegisterNames64 : RegisterNames32;
+
+            PadInstruction(Print(Str("xor ")));
+            Print(RegisterNameMap[Dest]);
+            Print(Str(", "));
+            Print(RegisterNameMap[Source]);
+            PrintCharacter('\n');
+        }
         else if (Byte == 0xc3)
         {
             Index++;

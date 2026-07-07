@@ -183,7 +183,42 @@ local void GenerateNode(generator* Gen, node* Node)
                 // NOTE(vak):
                 // 48 0f b6 c0  movzx rax, al
                 GenU32(Gen, 0xc0b60f48);
-            }
+            } break;
+
+            case NodeKind_ShiftLeft:
+            {
+                // NOTE(vak):
+                // 48 d3 e0     sal rax, cl
+                GenU24(Gen, 0xe0d348);
+            } break;
+
+            case NodeKind_ShiftRight:
+            {
+                // NOTE(vak):
+                // 48 d3 f8     sar rax, cl
+                GenU24(Gen, 0xf8d348);
+            } break;
+
+            case NodeKind_BitwiseAnd:
+            {
+                // NOTE(vak):
+                // 48 23 c1     and rax, rcx
+                GenU24(Gen, 0xc12348);
+            } break;
+
+            case NodeKind_BitwiseOr:
+            {
+                // NOTE(vak):
+                // 48 0b c1     or rax, rcx
+                GenU24(Gen, 0xc10b48);
+            } break;
+
+            case NodeKind_BitwiseXor:
+            {
+                // NOTE(vak):
+                // 48 33 c1     xor rac, rcx
+                GenU24(Gen, 0xc13348);
+            } break;
         }
     }
 }

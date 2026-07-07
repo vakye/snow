@@ -20,6 +20,13 @@ typedef enum
     NodeKind_Greater,
     NodeKind_LessEqual,
     NodeKind_GreaterEqual,
+
+    NodeKind_ShiftLeft,
+    NodeKind_ShiftRight,
+
+    NodeKind_BitwiseAnd,
+    NodeKind_BitwiseOr,
+    NodeKind_BitwiseXor,
 } node_kind;
 
 typedef struct node node;
@@ -32,8 +39,12 @@ struct node
 };
 
 local node* ParseExpression (token_stream* Stream);
+local node* ParseBitwiseOr  (token_stream* Stream);
+local node* ParseBitwiseXor (token_stream* Stream);
+local node* ParseBitwiseAnd (token_stream* Stream);
 local node* ParseEquality   (token_stream* Stream);
 local node* ParseComparison (token_stream* Stream);
+local node* ParseShift      (token_stream* Stream);
 local node* ParseSum        (token_stream* Stream);
 local node* ParseFactor     (token_stream* Stream);
 local node* ParsePrimary    (token_stream* Stream);
@@ -75,7 +86,64 @@ local node* MakeIntegerNode(usize Integer)
 
 local node* ParseExpression(token_stream* Stream)
 {
+    node* Node = ParseBitwiseOr(Stream);
+    return (Node);
+}
+
+local node* ParseBitwiseOr(token_stream* Stream)
+{
+    node* Node = ParseBitwiseXor(Stream);
+
+    for (;;)
+    {
+        if (MatchAndNextToken(Stream, '|'))
+        {
+            Node = MakeBinaryNode(NodeKind_BitwiseOr, Node, ParseBitwiseXor(Stream));
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    return (Node);
+}
+
+local node* ParseBitwiseXor(token_stream* Stream)
+{
+    node* Node = ParseBitwiseAnd(Stream);
+
+    for (;;)
+    {
+        if (MatchAndNextToken(Stream, '^'))
+        {
+            Node = MakeBinaryNode(NodeKind_BitwiseXor, Node, ParseBitwiseAnd(Stream));
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    return (Node);
+}
+
+local node* ParseBitwiseAnd(token_stream* Stream)
+{
     node* Node = ParseEquality(Stream);
+
+    for (;;)
+    {
+        if (MatchAndNextToken(Stream, '&'))
+        {
+            Node = MakeBinaryNode(NodeKind_BitwiseAnd, Node, ParseEquality(Stream));
+        }
+        else
+        {
+            break;
+        }
+    }
+
     return (Node);
 }
 
@@ -104,30 +172,53 @@ local node* ParseEquality(token_stream* Stream)
 
 local node* ParseComparison(token_stream* Stream)
 {
-    node* Node = ParseSum(Stream);
+    node* Node = ParseShift(Stream);
 
     for (;;)
     {
             if (MatchAndNextToken(Stream, '<'))
             {
-                Node = MakeBinaryNode(NodeKind_Less, Node, ParseSum(Stream));
+                Node = MakeBinaryNode(NodeKind_Less, Node, ParseShift(Stream));
             }
             else if (MatchAndNextToken(Stream, '>'))
             {
-                Node = MakeBinaryNode(NodeKind_Greater, Node, ParseSum(Stream));
+                Node = MakeBinaryNode(NodeKind_Greater, Node, ParseShift(Stream));
             }
             else if (MatchAndNextToken(Stream, TokenKind_LessEqual))
             {
-                Node = MakeBinaryNode(NodeKind_LessEqual, Node, ParseSum(Stream));
+                Node = MakeBinaryNode(NodeKind_LessEqual, Node, ParseShift(Stream));
             }
             else if (MatchAndNextToken(Stream, TokenKind_GreaterEqual))
             {
-                Node = MakeBinaryNode(NodeKind_GreaterEqual, Node, ParseSum(Stream));
+                Node = MakeBinaryNode(NodeKind_GreaterEqual, Node, ParseShift(Stream));
             }
             else
             {
                 break;
             }
+    }
+
+    return (Node);
+}
+
+local node* ParseShift(token_stream* Stream)
+{
+    node* Node = ParseSum(Stream);
+
+    for (;;)
+    {
+        if (MatchAndNextToken(Stream, TokenKind_DoubleLess))
+        {
+            Node = MakeBinaryNode(NodeKind_ShiftLeft, Node, ParseSum(Stream));
+        }
+        else if (MatchAndNextToken(Stream, TokenKind_DoubleGreater))
+        {
+            Node = MakeBinaryNode(NodeKind_ShiftRight, Node, ParseSum(Stream));
+        }
+        else
+        {
+            break;
+        }
     }
 
     return (Node);

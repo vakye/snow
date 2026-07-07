@@ -24,6 +24,11 @@ local ssize EvaluateNode(node* Node)
         case NodeKind_Greater:
         case NodeKind_LessEqual:
         case NodeKind_GreaterEqual:
+        case NodeKind_ShiftLeft:
+        case NodeKind_ShiftRight:
+        case NodeKind_BitwiseAnd:
+        case NodeKind_BitwiseOr:
+        case NodeKind_BitwiseXor:
         {
             ssize Left = EvaluateNode(Node->Left);
             ssize Right = EvaluateNode(Node->Right);
@@ -43,6 +48,11 @@ local ssize EvaluateNode(node* Node)
                 case NodeKind_Greater:              Result = Left > Right; break;
                 case NodeKind_LessEqual:            Result = Left <= Right; break;
                 case NodeKind_GreaterEqual:         Result = Left >= Right; break;
+                case NodeKind_ShiftLeft:            Result = Left << Right; break;
+                case NodeKind_ShiftRight:           Result = Left >> Right; break;
+                case NodeKind_BitwiseAnd:           Result = Left & Right; break;
+                case NodeKind_BitwiseOr:            Result = Left | Right; break;
+                case NodeKind_BitwiseXor:           Result = Left ^ Right; break;
             }
         }
     }

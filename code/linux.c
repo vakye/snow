@@ -290,6 +290,11 @@ local void PrintNode(node* Node)
         case NodeKind_Greater:
         case NodeKind_LessEqual:
         case NodeKind_GreaterEqual:
+        case NodeKind_ShiftLeft:
+        case NodeKind_ShiftRight:
+        case NodeKind_BitwiseAnd:
+        case NodeKind_BitwiseOr:
+        case NodeKind_BitwiseXor:
         {
             switch (Node->Kind)
             {
@@ -306,6 +311,11 @@ local void PrintNode(node* Node)
                 case NodeKind_Greater:      Println(Str("Greater:")); break;
                 case NodeKind_LessEqual:    Println(Str("LessEqual:")); break;
                 case NodeKind_GreaterEqual: Println(Str("GreaterEqual:")); break;
+                case NodeKind_ShiftLeft:    Println(Str("ShiftLeft:")); break;
+                case NodeKind_ShiftRight:   Println(Str("ShiftRight:")); break;
+                case NodeKind_BitwiseAnd:   Println(Str("BitwiseAnd:")); break;
+                case NodeKind_BitwiseOr:    Println(Str("BitwiseOr:")); break;
+                case NodeKind_BitwiseXor:   Println(Str("BitwiseXor:")); break;
             }
 
             Level++;
@@ -383,6 +393,37 @@ local ssize CompileAndRun(string Code)
     return (ProgramResult);
 }
 
+local ssize ParseAndEvaluateDetailed(string Code)
+{
+    ResetMemory();
+
+    token_stream TokenStream    = MakeTokenStream(Code);
+    node* RootNode              = Parse(&TokenStream);
+
+    ssize Result = Evaluate(RootNode);
+
+    Print(Str("\n"));
+
+    Println(Str("============================================================================================"));
+    Println(Str("AST:"));
+    Println(Str("============================================================================================"));
+    PrintNode(RootNode);
+
+    Print(Str("\n\n"));
+
+    Println(Str("============================================================================================"));
+    Print(Str("Evaluation Result: "));
+    PrintUSize(Result);
+    PrintCharacter('\n');
+    Println(Str("============================================================================================"));
+
+    Print(Str("\n"));
+
+    ResetMemory();
+
+    return (Result);
+}
+
 local ssize ParseAndEvaluate(string Code)
 {
     ResetMemory();
@@ -428,12 +469,16 @@ void LinuxEntry(void)
         { -1806,        StaticStr("(((((53))) - 26 - 11 * 31 - (80 - 11 + 73)) + ((15 * 50) - 50 * (42)))") },
         { 2715,         StaticStr("(((((34 * 80) - (6)) - 13 - 3) + 17) + ((94 / 58 - 45 * (37 / 83) + 70 / 65 / 24) / ((((41) - (5 * 99) * 72) + ((23 + 70) * ((78 - 33))))) - ((3) / 23)))") },
         { 284403643073, StaticStr("(((((86 / 58) * ((61 / 11) + (40 * (44 * 4) * ((19 * 13 + 76) - (17 + 93))))) / 1 / 59) * ((43 / 61) - 85) / ((11 - 42) - 48) + ((8 * (((75 + (62 + 59)) - (19 / ((47 * 98) - 87))) - 23)) * ((97 / (70 - (79 * 6)) + ((30 + 37 * (42 * (46 * ((84 / 84 + 9) + (83 * 81))))) / 89 * 38)) - (7 + 5) * (((93 - 43) * (84)) / 12 / 52 * 79)))) + (80 / 64 / (97 - (28 + 80))))") },
+        { 32,           StaticStr("1 << 5") },
+        { 1024,         StaticStr("1 << 10") },
+        { 1048576,      StaticStr("1 << (100 - 2*2*2*2*2*2 + 2*16 - 2*24)") },
+        { 28,           StaticStr("28711 >> 10") },
+        { 184032538241, StaticStr("(((((86  >> 2) * ((61 >> 2) + (40 * (44 << 2) * ((19 * 13 >= 76) - (17 + 93))))) / 1 / 59) * ((43 / 61) < 85) / ((11 - 42) - 48) + ((8 * (((75 + (62 + 59 >> 1)) - (19 / ((47 * 98) - 87))) - 23)) * ((97 / (70 - (79 * 6)) + ((30 + 37 * (42 * (46 * ((84 / 84 + 9) + (83 * 81))))) / 89 * 38)) - (7 << 5) * (((93 - 43) * (84)) / 12 / 52 * 79)))) + (80 / 64 / (97 - (28 + 80))))") },
+        { 3,            StaticStr("4294967295 & 3") },
+        { 10,           StaticStr("2871882 >> 3 & 10 | 3 - 2^1 & 1 + (4 % 3)^1 + 9^1 & 7") },
+        { 425471,       StaticStr("43690 ^ 448341") },
     };
 
-#if 0
-    PrintSSize(ParseAndEvaluate(TestCases[19].Code));
-    PrintCharacter('\n');
-#else
     usize CasesPassed = 0;
 
     PrintCharacter('\n');
@@ -480,7 +525,6 @@ void LinuxEntry(void)
     PrintCharacter('\n');
 
     PrintCharacter('\n');
-#endif
 
     Exit(0);
 }

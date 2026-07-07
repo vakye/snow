@@ -8,10 +8,13 @@ typedef enum
     TokenKind_Integer = 128,
     TokenKind_Identifier,
 
-    TokenKind_DoubleEqual,  // NOTE(vak): ==
-    TokenKind_ExclamEqual,  // NOTE(vak): !=
-    TokenKind_LessEqual,    // NOTE(vak): <=
-    TokenKind_GreaterEqual, // NOTE(vak): >=
+    TokenKind_DoubleEqual,   // NOTE(vak): ==
+    TokenKind_ExclamEqual,   // NOTE(vak): !=
+    TokenKind_LessEqual,     // NOTE(vak): <=
+    TokenKind_GreaterEqual,  // NOTE(vak): >=
+
+    TokenKind_DoubleLess,    // NOTE(vak): <<
+    TokenKind_DoubleGreater, // NOTE(vak): >>
 } token_kind;
 
 typedef struct
@@ -172,6 +175,9 @@ local token TokenizePunctuation(token_stream* Stream)
             MatchToTokenKind('!', '=', TokenKind_ExclamEqual)
             MatchToTokenKind('<', '=', TokenKind_LessEqual)
             MatchToTokenKind('>', '=', TokenKind_GreaterEqual)
+
+            MatchToTokenKind('<', '<', TokenKind_DoubleLess)
+            MatchToTokenKind('>', '>', TokenKind_DoubleGreater)
 
             #undef MatchToTokenKind
         }
