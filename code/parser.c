@@ -27,6 +27,10 @@ typedef enum
     NodeKind_BitwiseAnd,
     NodeKind_BitwiseOr,
     NodeKind_BitwiseXor,
+
+    NodeKind_Negate,
+    NodeKind_BitwiseNot,
+    NodeKind_LogicalNot,
 } node_kind;
 
 typedef struct node node;
@@ -47,6 +51,7 @@ local node* ParseComparison (token_stream* Stream);
 local node* ParseShift      (token_stream* Stream);
 local node* ParseSum        (token_stream* Stream);
 local node* ParseFactor     (token_stream* Stream);
+local node* ParsePrefix     (token_stream* Stream);
 local node* ParsePrimary    (token_stream* Stream);
 
 local node* Parse(token_stream* Stream)
@@ -61,6 +66,15 @@ local node* MakeNode(node_kind Kind)
 
     ZeroMemory(Node, sizeof(node));
     Node->Kind = Kind;
+
+    return (Node);
+}
+
+local node* MakeUnaryNode(node_kind Kind, node* Left)
+{
+    node* Node = MakeNode(Kind);
+
+    Node->Left = Left;
 
     return (Node);
 }
@@ -249,26 +263,54 @@ local node* ParseSum(token_stream* Stream)
 
 local node* ParseFactor(token_stream* Stream)
 {
-    node* Node = ParsePrimary(Stream);
+    node* Node = ParsePrefix(Stream);
 
     for (;;)
     {
         if (MatchAndNextToken(Stream, '*'))
         {
-            Node = MakeBinaryNode(NodeKind_Mul, Node, ParsePrimary(Stream));
+            Node = MakeBinaryNode(NodeKind_Mul, Node, ParsePrefix(Stream));
         }
         else if (MatchAndNextToken(Stream, '/'))
         {
-            Node = MakeBinaryNode(NodeKind_Div, Node, ParsePrimary(Stream));
+            Node = MakeBinaryNode(NodeKind_Div, Node, ParsePrefix(Stream));
         }
         else if (MatchAndNextToken(Stream, '%'))
         {
-            Node = MakeBinaryNode(NodeKind_Mod, Node, ParsePrimary(Stream));
+            Node = MakeBinaryNode(NodeKind_Mod, Node, ParsePrefix(Stream));
         }
         else
         {
             break;
         }
+    }
+
+    return (Node);
+}
+
+local node* ParsePrefix(token_stream* Stream)
+{
+    node* Node = 0;
+
+    if (MatchAndNextToken(Stream, '~'))
+    {
+        Node = MakeUnaryNode(NodeKind_BitwiseNot, ParsePrefix(Stream));
+    }
+    else if (MatchAndNextToken(Stream, '!'))
+    {
+        Node = MakeUnaryNode(NodeKind_LogicalNot, ParsePrefix(Stream));
+    }
+    else if (MatchAndNextToken(Stream, '-'))
+    {
+        Node = MakeUnaryNode(NodeKind_Negate, ParsePrefix(Stream));
+    }
+    else if (MatchAndNextToken(Stream, '+'))
+    {
+        Node = ParsePrefix(Stream);
+    }
+    else
+    {
+        Node = ParsePrimary(Stream);
     }
 
     return (Node);

@@ -279,6 +279,26 @@ local void PrintNode(node* Node)
             PrintCharacter('\n');
         } break;
 
+        case NodeKind_Negate:
+        case NodeKind_BitwiseNot:
+        case NodeKind_LogicalNot:
+        {
+            switch (Node->Kind)
+            {
+                default: {} break;
+
+                case NodeKind_Negate:       Println(Str("Negate:")); break;
+                case NodeKind_BitwiseNot:   Println(Str("BitwiseNot:")); break;
+                case NodeKind_LogicalNot:   Println(Str("LogicalNot:")); break;
+            }
+
+            Level++;
+
+            PrintNode(Node->Left);
+
+            Level--;
+        } break;
+
         case NodeKind_Add:
         case NodeKind_Sub:
         case NodeKind_Mul:
@@ -477,6 +497,11 @@ void LinuxEntry(void)
         { 3,            StaticStr("4294967295 & 3") },
         { 10,           StaticStr("2871882 >> 3 & 10 | 3 - 2^1 & 1 + (4 % 3)^1 + 9^1 & 7") },
         { 425471,       StaticStr("43690 ^ 448341") },
+        { -1,           StaticStr("-1") },
+        { -137,         StaticStr("-+-+++172 + +-+---++-+309") },
+        { 34856,        StaticStr("~23820247 & 65535") },
+        { 485732352,    StaticStr("(485729837 + 4096 - 1) & ~4095") },
+        { 0,            StaticStr("!!!-~!--~0") },
     };
 
     usize CasesPassed = 0;

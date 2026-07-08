@@ -323,6 +323,31 @@ local void Disassemble(void* Data, usize Size)
             Print(RegisterNameMap[Source]);
             PrintCharacter('\n');
         }
+        else if (Byte == 0x85)
+        {
+            Index++;
+            if (Index == Size)
+            {
+                Println(Str("Expected MODRM after TEST"));
+                Exit(1);
+            }
+
+            u8 ModRM = Bytes[Index];
+            Index++;
+
+            OutputInstructionHex(Data, StartIndex, Index);
+
+            u8 Dest   = REX_B*8 + ((ModRM >> 0) & 0x7);
+            u8 Source = REX_R*8 + ((ModRM >> 3) & 0x7);
+
+            string* RegisterNameMap = (REX_W) ? RegisterNames64 : RegisterNames32;
+
+            PadInstruction(Print(Str("test ")));
+            Print(RegisterNameMap[Dest]);
+            Print(Str(", "));
+            Print(RegisterNameMap[Source]);
+            PrintCharacter('\n');
+        }
         else if (Byte == 0x99)
         {
             Index++;
@@ -452,7 +477,7 @@ local void Disassemble(void* Data, usize Size)
             Index++;
             if (Index == Size)
             {
-                Println(Str("Expected MODRM after IDIV"));
+                Println(Str("Expected MODRM after opcode F7"));
                 Exit(1);
             }
 
@@ -462,14 +487,26 @@ local void Disassemble(void* Data, usize Size)
             OutputInstructionHex(Data, StartIndex, Index);
 
             u8 Select = ((ModRM >> 3) & 0x7);
-            u8 Source = REX_B*8 + ((ModRM >> 0) & 0x7);
+            u8 RM = REX_B*8 + ((ModRM >> 0) & 0x7);
 
             string* RegisterNameMap = (REX_W) ? RegisterNames64 : RegisterNames32;
 
             if (Select == 7)
             {
                 PadInstruction(Print(Str("idiv ")));
-                Print(RegisterNameMap[Source]);
+                Print(RegisterNameMap[RM]);
+                PrintCharacter('\n');
+            }
+            else if (Select == 3)
+            {
+                PadInstruction(Print(Str("neg ")));
+                Print(RegisterNameMap[RM]);
+                PrintCharacter('\n');
+            }
+            else if (Select == 2)
+            {
+                PadInstruction(Print(Str("not ")));
+                Print(RegisterNameMap[RM]);
                 PrintCharacter('\n');
             }
             else

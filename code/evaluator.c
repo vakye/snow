@@ -13,6 +13,22 @@ local ssize EvaluateNode(node* Node)
 
         case NodeKind_Integer: Result = Node->Integer; break;
 
+        case NodeKind_Negate:
+        case NodeKind_BitwiseNot:
+        case NodeKind_LogicalNot:
+        {
+            ssize Left = EvaluateNode(Node->Left);
+
+            switch (Node->Kind)
+            {
+                default: { Println(Str("Unimplemented unary node kind for evaluator")); Exit(1); } break;
+
+                case NodeKind_Negate:               Result = -Left; break;
+                case NodeKind_BitwiseNot:           Result = ~Left; break;
+                case NodeKind_LogicalNot:           Result = !Left; break;
+            }
+        } break;
+
         case NodeKind_Add:
         case NodeKind_Sub:
         case NodeKind_Mul:
