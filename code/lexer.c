@@ -309,3 +309,15 @@ local b32 MatchAndNextToken(token_stream* Stream, token_kind Kind)
     return (Result);
 }
 
+local b32 MatchStringAndNextToken(token_stream* Stream, string Match)
+{
+    string String = GetTokenString(Stream, Stream->Current);
+
+    b32 Result = StringIsEqual(String, Match);
+
+    if (Result)
+        NextToken(Stream);
+
+    return (Result);
+}
+

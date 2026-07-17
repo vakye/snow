@@ -3,9 +3,25 @@
 
 typedef struct
 {
+    usize Offset;
+} label;
+
+typedef struct fill_in_rel32 fill_in_rel32;
+struct fill_in_rel32
+{
+    usize Offset;
+    label* Target;
+    fill_in_rel32* Next;
+};
+
+typedef struct
+{
     void* Base;
     usize Size;
     usize At;
+
+    label* ReturnLabel;
+    fill_in_rel32* FirstFillInRel32;
 } generator;
 
 typedef struct
@@ -35,13 +51,49 @@ local void GenU48(generator* Gen, u64 Value) { GenBytes(Gen, &Value, 6); }
 local void GenU56(generator* Gen, u64 Value) { GenBytes(Gen, &Value, 7); }
 local void GenU64(generator* Gen, u64 Value) { GenBytes(Gen, &Value, 8); }
 
+local label* MakeLabel(void)
+{
+    label* Label = Allocate(sizeof(label));
+    Label->Offset = 0;
+
+    return (Label);
+}
+
+local void PlaceLabelHere(generator* Gen, label* Label)
+{
+    Label->Offset = Gen->At;
+}
+
+local void FillInRel32(generator* Gen, label* Target)
+{
+    fill_in_rel32* FillIn = Allocate(sizeof(fill_in_rel32));
+
+    FillIn->Offset = Gen->At;
+    FillIn->Target = Target;
+    FillIn->Next = 0;
+
+    if (!Gen->FirstFillInRel32)
+    {
+        Gen->FirstFillInRel32 = FillIn;
+    }
+    else
+    {
+        FillIn->Next = Gen->FirstFillInRel32;
+        Gen->FirstFillInRel32 = FillIn;
+    }
+
+    GenU32(Gen, 0x00000000);
+}
+
 local void GenerateNode(generator* Gen, node* Node);
 
 local generated Generate(node* RootNode)
 {
     generator Gen = {0};
+
     Gen.Size = KB(64);
     Gen.Base = Allocate(Gen.Size);
+    Gen.ReturnLabel = MakeLabel();
 
     generated Result =
     {
@@ -49,6 +101,7 @@ local generated Generate(node* RootNode)
         .Size = 0,
     };
 
+    // NOTE(vak): Generate code
     {
         // NOTE(vak):
         // 55           push rbp
@@ -57,11 +110,37 @@ local generated Generate(node* RootNode)
 
         GenerateNode(&Gen, RootNode);
 
+        PlaceLabelHere(&Gen, Gen.ReturnLabel);
         // NOTE(vak):
         // 48 8b e5     mov rsp, rbp
         // 5d           pop rbp
         // c3           ret
         GenU40(&Gen, 0xc35de58b48);
+    }
+
+    // NOTE(vak): Resolve fill ins
+    for (
+        fill_in_rel32* FillIn = Gen.FirstFillInRel32;
+        FillIn;
+        FillIn = FillIn->Next
+    )
+    {
+        s32* Write = (s32*)((u8*)Gen.Base + FillIn->Offset);
+        label* Target = FillIn->Target;
+
+        // NOTE(vak): REL32 in x86_64 is added to RIP right after
+        // the REL32 part so need to subtract 4 bytes (REL32).
+        ssize Displacement = (ssize)Target->Offset - (ssize)FillIn->Offset - 4;
+
+        if ((S32Min <= Displacement) && (Displacement <= S32Max))
+        {
+            *Write = (s32)Displacement;
+        }
+        else
+        {
+            Println(Str("Displacement is out of bounds for REL32 fill in"));
+            Exit(1);
+        }
     }
 
     Result.Size = Gen.At;
@@ -106,6 +185,15 @@ local void GenerateUnaryNode(generator* Gen, node* Node)
             // 48 0f b6 c0  movzx rax, al
             GenU64(Gen, 0x0f48c0940fc08548);
             GenU16(Gen, 0xc0b6);
+        } break;
+
+        case NodeKind_Return:
+        {
+            // NOTE(vak):
+            // e9 REL32     jmp Return
+
+            GenU8(Gen, 0xe9);
+            FillInRel32(Gen, Gen->ReturnLabel);
         } break;
     }
 }
@@ -259,6 +347,12 @@ local void GenerateNode(generator* Gen, node* Node)
     {
         default: { Println(Str("Unknown node kind for generator")); Exit(1); } break;
 
+        case NodeKind_Statement:
+        {
+            GenerateNode(Gen, Node->Expr);
+            GenerateNode(Gen, Node->Next);
+        } break;
+
         case NodeKind_Integer:
         {
             // NOTE(vak):
@@ -271,6 +365,7 @@ local void GenerateNode(generator* Gen, node* Node)
         case NodeKind_Negate:
         case NodeKind_BitwiseNot:
         case NodeKind_LogicalNot:
+        case NodeKind_Return:
         {
             GenerateUnaryNode(Gen, Node);
         } break;

@@ -28,6 +28,30 @@ local usize OutputInstructionHex(void* Data, usize From, usize To)
     return (Result);
 }
 
+local usize PrintInstructionOffset(usize Index)
+{
+    usize Result = 0;
+
+    char Buffer[16] = {0};
+    char DigitMap[] = "0123456789abcdef";
+
+    Result += PrintCharacter(' ');
+
+    for (usize Nibble = 0; Nibble < 16; Nibble++)
+    {
+        Buffer[15 - Nibble] = DigitMap[(Index >> (4*Nibble)) & 0x0F];
+    }
+
+    Result += Print(Str("0x"));
+    Result += Print(StrData(Buffer, sizeof(Buffer)));
+
+    usize Pad = 28;
+    while (Result < Pad)
+        Result += PrintCharacter(' ');
+
+    return (Result);
+}
+
 local void PadInstruction(usize NameSize)
 {
     usize InstructionPad = 12;
@@ -144,6 +168,8 @@ local void Disassemble(void* Data, usize Size)
     while (Index < Size)
     {
         usize StartIndex = Index;
+
+        PrintInstructionOffset(StartIndex);
 
         u8 Byte = Bytes[Index];
         u8 REX = 0;
@@ -347,6 +373,26 @@ local void Disassemble(void* Data, usize Size)
             Print(Str(", "));
             Print(RegisterNameMap[Source]);
             PrintCharacter('\n');
+        }
+        else if (Byte == 0xe9)
+        {
+            Index++;
+
+            if (Index + 4 > Size)
+            {
+                Println(Str("Expected REL32 after JMP instruction"));
+                Exit(1);
+            }
+
+            s32 Displacement = *(s32*)(Bytes + Index);
+            Index += 4;
+
+            OutputInstructionHex(Data, StartIndex, Index);
+
+            PadInstruction(Print(Str("jmp ")));
+            Print(Str("rel32("));
+            PrintSSize(Displacement);
+            Println(Str(")"));
         }
         else if (Byte == 0x99)
         {

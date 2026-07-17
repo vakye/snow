@@ -32,6 +32,9 @@ typedef u32 b32;
 #define true 1
 #define false 0
 
+#define S32Min ((s32)(0x80000000))
+#define S32Max ((s32)(0x7FFFFFFF))
+
 local void CopyMemory(void* DestInit, void* SourceInit, usize Size)
 {
     u8* Dest = (u8*)DestInit;
@@ -57,4 +60,20 @@ typedef struct
 #define StaticStr(Literal)  {Literal, sizeof(Literal) - 1}
 #define Str(Literal)        (string){Literal, sizeof(Literal) - 1}
 #define StrData(Data, Size) (string){Data, Size}
+
+local b32 StringIsEqual(string A, string B)
+{
+    b32 Result = (A.Size == B.Size);
+
+    if (Result)
+    {
+        for (usize Index = 0; Index < A.Size; Index++)
+        {
+            if (A.Data[Index] != B.Data[Index])
+                break;
+        }
+    }
+
+    return (Result);
+}
 

@@ -31,34 +31,24 @@ typedef enum
     NodeKind_Negate,
     NodeKind_BitwiseNot,
     NodeKind_LogicalNot,
+
+    NodeKind_Statement,
+    NodeKind_Return,
 } node_kind;
 
 typedef struct node node;
 struct node
 {
     node_kind Kind;
+
     node* Left;
     node* Right;
+
     usize Integer;
+
+    node* Expr;
+    node* Next;
 };
-
-local node* ParseExpression (token_stream* Stream);
-local node* ParseBitwiseOr  (token_stream* Stream);
-local node* ParseBitwiseXor (token_stream* Stream);
-local node* ParseBitwiseAnd (token_stream* Stream);
-local node* ParseEquality   (token_stream* Stream);
-local node* ParseComparison (token_stream* Stream);
-local node* ParseShift      (token_stream* Stream);
-local node* ParseSum        (token_stream* Stream);
-local node* ParseFactor     (token_stream* Stream);
-local node* ParsePrefix     (token_stream* Stream);
-local node* ParsePrimary    (token_stream* Stream);
-
-local node* Parse(token_stream* Stream)
-{
-    node* Result = ParseExpression(Stream);
-    return (Result);
-}
 
 local node* MakeNode(node_kind Kind)
 {
@@ -94,6 +84,61 @@ local node* MakeIntegerNode(usize Integer)
     node* Node = MakeNode(NodeKind_Integer);
 
     Node->Integer = Integer;
+
+    return (Node);
+}
+
+local node* ParseStatement  (token_stream* Stream);
+local node* ParseExpression (token_stream* Stream);
+local node* ParseBitwiseOr  (token_stream* Stream);
+local node* ParseBitwiseXor (token_stream* Stream);
+local node* ParseBitwiseAnd (token_stream* Stream);
+local node* ParseEquality   (token_stream* Stream);
+local node* ParseComparison (token_stream* Stream);
+local node* ParseShift      (token_stream* Stream);
+local node* ParseSum        (token_stream* Stream);
+local node* ParseFactor     (token_stream* Stream);
+local node* ParsePrefix     (token_stream* Stream);
+local node* ParsePrimary    (token_stream* Stream);
+
+local node* Parse(token_stream* Stream)
+{
+    node* First = ParseStatement(Stream);
+    node* Last = First;
+
+    while (!NoMoreTokens(Stream))
+    {
+        Last->Next = ParseStatement(Stream);
+        Last = Last->Next;
+    }
+
+    return (First);
+}
+
+local node* ParseStatement(token_stream* Stream)
+{
+    node* Node = MakeNode(NodeKind_Statement);
+
+    if (MatchStringAndNextToken(Stream, Str("return")))
+    {
+        Node->Expr = MakeUnaryNode(NodeKind_Return, ParseExpression(Stream));
+
+        if (!MatchAndNextToken(Stream, ';'))
+        {
+            Println(Str("Expected ';' at end of statement"));
+            Exit(1);
+        }
+    }
+    else
+    {
+        Node->Expr = ParseExpression(Stream);
+
+        if (!MatchAndNextToken(Stream, ';'))
+        {
+            Println(Str("Expected ';' at end of statement"));
+            Exit(1);
+        }
+    }
 
     return (Node);
 }
@@ -335,6 +380,10 @@ local node* ParsePrimary(token_stream* Stream)
             Println(Str("Missing matching ')' for '('"));
             Exit(1);
         }
+    }
+    else if (MatchToken(Stream, ';'))
+    {
+        // NOTE(vak): Ignore
     }
     else
     {
