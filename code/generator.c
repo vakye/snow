@@ -54,7 +54,7 @@ local void GenU64(generator* Gen, u64 Value) { GenBytes(Gen, &Value, 8); }
 local label* MakeLabel(void)
 {
     label* Label = Allocate(sizeof(label));
-    Label->Offset = 0;
+    Label->Offset = USizeMax;
 
     return (Label);
 }
@@ -127,6 +127,12 @@ local generated Generate(node* RootNode)
     {
         s32* Write = (s32*)((u8*)Gen.Base + FillIn->Offset);
         label* Target = FillIn->Target;
+
+        if (Target->Offset == USizeMax)
+        {
+            Println(Str("Label is not placed, so fill_in_rel32 could not be resolved"));
+            Exit(1);
+        }
 
         // NOTE(vak): REL32 in x86_64 is added to RIP right after
         // the REL32 part so need to subtract 4 bytes (REL32).

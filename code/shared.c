@@ -32,8 +32,24 @@ typedef u32 b32;
 #define true 1
 #define false 0
 
+#define S8Min  ((s8 )(0x80))
+#define S16Min ((s16)(0x8000))
 #define S32Min ((s32)(0x80000000))
+#define S64Min ((s64)(0x8000000000000000))
+
+#define S8Max  ((s8 )(0x7F))
+#define S16Max ((s16)(0x7FFF))
 #define S32Max ((s32)(0x7FFFFFFF))
+#define S64Max ((s64)(0x7FFFFFFFFFFFFFFF))
+
+#define U8Max  ((u8 )(0xFF))
+#define U16Max ((u16)(0xFFFF))
+#define U32Max ((u32)(0xFFFFFFFF))
+#define U64Max ((u64)(0xFFFFFFFFFFFFFFFF))
+
+#define SSizeMin S64Min
+#define SSizeMax S64Max
+#define USizeMax U64Max
 
 local void CopyMemory(void* DestInit, void* SourceInit, usize Size)
 {
