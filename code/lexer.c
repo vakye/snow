@@ -8,13 +8,16 @@ typedef enum
     TokenKind_Integer = 128,
     TokenKind_Identifier,
 
-    TokenKind_DoubleEqual,   // NOTE(vak): ==
-    TokenKind_ExclamEqual,   // NOTE(vak): !=
-    TokenKind_LessEqual,     // NOTE(vak): <=
-    TokenKind_GreaterEqual,  // NOTE(vak): >=
+    TokenKind_DoubleEqual,      // NOTE(vak): ==
+    TokenKind_ExclamEqual,      // NOTE(vak): !=
+    TokenKind_LessEqual,        // NOTE(vak): <=
+    TokenKind_GreaterEqual,     // NOTE(vak): >=
 
-    TokenKind_DoubleLess,    // NOTE(vak): <<
-    TokenKind_DoubleGreater, // NOTE(vak): >>
+    TokenKind_DoubleLess,       // NOTE(vak): <<
+    TokenKind_DoubleGreater,    // NOTE(vak): >>
+
+    TokenKind_DoubleAmpersand,  // NOTE(vak): &&
+    TokenKind_DoubleBar,        // NOTE(vak): ||
 } token_kind;
 
 typedef struct
@@ -158,11 +161,10 @@ local token TokenizePunctuation(token_stream* Stream)
         .Size = 1
     };
 
-    Stream->At++;
-    if (Stream->At < Stream->Size)
+    if (Stream->At + 2 <= Stream->Size)
     {
         char C0 = Character;
-        char C1 = Stream->Data[Stream->At];
+        char C1 = Stream->Data[Stream->At + 1];
 
         u16 Compare = ((u16)C1 << 8) | (C0);
 
@@ -179,12 +181,14 @@ local token TokenizePunctuation(token_stream* Stream)
             MatchToTokenKind('<', '<', TokenKind_DoubleLess)
             MatchToTokenKind('>', '>', TokenKind_DoubleGreater)
 
+            MatchToTokenKind('&', '&', TokenKind_DoubleAmpersand)
+            MatchToTokenKind('|', '|', TokenKind_DoubleBar)
+
             #undef MatchToTokenKind
         }
-
-        if (Result.Size == 2)
-            Stream->At++;
     }
+
+    Stream->At += Result.Size;
 
     return (Result);
 }

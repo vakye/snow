@@ -271,17 +271,6 @@ local void PrintNode(node* Node)
             Exit(1);
         } break;
 
-        case NodeKind_Statement:
-        {
-            Println(Str("Statement: "));
-
-            Level++;
-            PrintNode(Node->Expr);
-            Level--;
-
-            PrintNode(Node->Next);
-        } break;
-
         case NodeKind_Integer:
         {
             Print(Str("Integer: "));
@@ -327,6 +316,8 @@ local void PrintNode(node* Node)
         case NodeKind_BitwiseAnd:
         case NodeKind_BitwiseOr:
         case NodeKind_BitwiseXor:
+        case NodeKind_LogicalAnd:
+        case NodeKind_LogicalOr:
         {
             switch (Node->Kind)
             {
@@ -348,6 +339,8 @@ local void PrintNode(node* Node)
                 case NodeKind_BitwiseAnd:   Println(Str("BitwiseAnd:")); break;
                 case NodeKind_BitwiseOr:    Println(Str("BitwiseOr:")); break;
                 case NodeKind_BitwiseXor:   Println(Str("BitwiseXor:")); break;
+                case NodeKind_LogicalAnd:   Println(Str("LogicalAnd:")); break;
+                case NodeKind_LogicalOr:    Println(Str("LogicalOr:")); break;
             }
 
             Level++;
@@ -357,7 +350,22 @@ local void PrintNode(node* Node)
 
             Level--;
         } break;
+
+        case NodeKind_Ternary:
+        {
+            Println(Str("Ternary:"));
+
+            Level++;
+
+            PrintNode(Node->TernaryCond);
+            PrintNode(Node->TernaryIf);
+            PrintNode(Node->TernaryElse);
+
+            Level--;
+        } break;
     }
+
+    PrintNode(Node->Next);
 }
 
 typedef ssize program_entry(void);
@@ -471,6 +479,13 @@ void LinuxEntry(void)
         { 0,            StaticStr("!!!-~!--~0;") },
         { 2,            StaticStr("10 + 10; ;; 2;;;") },
         { 10,           StaticStr("return 10; 10 + 10;") },
+        { 1,            StaticStr("123812387 && 2318;") },
+        { 0,            StaticStr("0 && 238 + 231;"), },
+        { 0,            StaticStr("2387 && 127 - 127;"), },
+        { 1,            StaticStr("2481 || 0;") },
+        { 0,            StaticStr("127 - 127 || 33*100 - 3300;") },
+        { 2388,         StaticStr("1 ? (10 > 4) ? 2388 : 2814 : 24;") },
+        { 20,           StaticStr("0 ? (23 > 6) ? 481276 : 28192857 : (7 < 34) ? 20 : 481;") },
     };
 
     usize CasesPassed = 0;

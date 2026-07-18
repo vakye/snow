@@ -31,8 +31,11 @@ typedef enum
     NodeKind_Negate,
     NodeKind_BitwiseNot,
     NodeKind_LogicalNot,
+    NodeKind_LogicalAnd,
+    NodeKind_LogicalOr,
 
-    NodeKind_Statement,
+    NodeKind_Ternary,
+
     NodeKind_Return,
 } node_kind;
 
@@ -40,14 +43,14 @@ typedef struct node node;
 struct node
 {
     node_kind Kind;
-
-    node* Left;
-    node* Right;
-
-    usize Integer;
-
-    node* Expr;
     node* Next;
+
+    union
+    {
+        struct { node* Left; node* Right; };
+        struct { usize Integer; };
+        struct { node* TernaryCond; node* TernaryIf; node* TernaryElse; };
+    };
 };
 
 local node* MakeNode(node_kind Kind)
@@ -90,6 +93,9 @@ local node* MakeIntegerNode(usize Integer)
 
 local node* ParseStatement  (token_stream* Stream);
 local node* ParseExpression (token_stream* Stream);
+local node* ParseTernary    (token_stream* Stream);
+local node* ParseLogicalOr  (token_stream* Stream);
+local node* ParseLogicalAnd (token_stream* Stream);
 local node* ParseBitwiseOr  (token_stream* Stream);
 local node* ParseBitwiseXor (token_stream* Stream);
 local node* ParseBitwiseAnd (token_stream* Stream);
@@ -109,7 +115,9 @@ local node* Parse(token_stream* Stream)
     while (!NoMoreTokens(Stream))
     {
         Last->Next = ParseStatement(Stream);
-        Last = Last->Next;
+
+        if (Last->Next)
+            Last = Last->Next;
     }
 
     return (First);
@@ -117,11 +125,11 @@ local node* Parse(token_stream* Stream)
 
 local node* ParseStatement(token_stream* Stream)
 {
-    node* Node = MakeNode(NodeKind_Statement);
+    node* Node = 0;
 
     if (MatchStringAndNextToken(Stream, Str("return")))
     {
-        Node->Expr = MakeUnaryNode(NodeKind_Return, ParseExpression(Stream));
+        Node = MakeUnaryNode(NodeKind_Return, ParseExpression(Stream));
 
         if (!MatchAndNextToken(Stream, ';'))
         {
@@ -131,7 +139,7 @@ local node* ParseStatement(token_stream* Stream)
     }
     else
     {
-        Node->Expr = ParseExpression(Stream);
+        Node = ParseExpression(Stream);
 
         if (!MatchAndNextToken(Stream, ';'))
         {
@@ -145,7 +153,72 @@ local node* ParseStatement(token_stream* Stream)
 
 local node* ParseExpression(token_stream* Stream)
 {
+    node* Node = ParseTernary(Stream);
+    return (Node);
+}
+
+local node* ParseTernary(token_stream* Stream)
+{
+    node* Node = ParseLogicalOr(Stream);
+
+    if (MatchAndNextToken(Stream, '?'))
+    {
+        node* Ternary = MakeNode(NodeKind_Ternary);
+
+        Ternary->TernaryCond = Node;
+        Ternary->TernaryIf = ParseTernary(Stream);
+
+        if (MatchAndNextToken(Stream, ':'))
+        {
+            Ternary->TernaryElse = ParseTernary(Stream);
+        }
+        else
+        {
+            Println(Str("Missing ':' in ternary conditional"));
+            Exit(1);
+        }
+
+        Node = Ternary;
+    }
+
+    return (Node);
+}
+
+local node* ParseLogicalOr(token_stream* Stream)
+{
+    node* Node = ParseLogicalAnd(Stream);
+
+    for (;;)
+    {
+        if (MatchAndNextToken(Stream, TokenKind_DoubleBar))
+        {
+            Node = MakeBinaryNode(NodeKind_LogicalOr, Node, ParseLogicalAnd(Stream));
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    return (Node);
+}
+
+local node* ParseLogicalAnd(token_stream* Stream)
+{
     node* Node = ParseBitwiseOr(Stream);
+
+    for (;;)
+    {
+        if (MatchAndNextToken(Stream, TokenKind_DoubleAmpersand))
+        {
+            Node = MakeBinaryNode(NodeKind_LogicalAnd, Node, ParseBitwiseOr(Stream));
+        }
+        else
+        {
+            break;
+        }
+    }
+
     return (Node);
 }
 

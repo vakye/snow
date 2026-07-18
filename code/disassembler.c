@@ -444,6 +444,46 @@ local void Disassemble(void* Data, usize Size)
                 Print(RegisterNameMap[Source]);
                 PrintCharacter('\n');
             }
+            else if ((Byte >= 0x80) && (Byte <= 0x8F))
+            {
+                persist string Instruction[16] =
+                {
+                    StaticStr("jo"),
+                    StaticStr("jno"),
+                    StaticStr("jb"),
+                    StaticStr("jae"),
+                    StaticStr("jz"),
+                    StaticStr("jnz"),
+                    StaticStr("jbe"),
+                    StaticStr("ja"),
+                    StaticStr("js"),
+                    StaticStr("jns"),
+                    StaticStr("jp"),
+                    StaticStr("jnp"),
+                    StaticStr("jl"),
+                    StaticStr("jnl"),
+                    StaticStr("jle"),
+                    StaticStr("jg"),
+                };
+
+                Index++;
+                if (Index + 4 > Size)
+                {
+                    Println(Str("Expected REL32 after Jcc instruction"));
+                    Exit(1);
+                }
+
+                s32 Displacement = *(s32*)(Bytes + Index);
+                Index += 4;
+
+                OutputInstructionHex(Data, StartIndex, Index);
+
+                PadInstruction(Print(Instruction[Byte - 0x80]));
+                Print(Str("rel32("));
+                PrintSSize(Displacement);
+                Print(Str(")"));
+                PrintCharacter('\n');
+            }
             else if ((Byte >= 0x90) && (Byte <= 0x9F))
             {
                 persist string Instruction[16] =

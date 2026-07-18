@@ -353,12 +353,6 @@ local void GenerateNode(generator* Gen, node* Node)
     {
         default: { Println(Str("Unknown node kind for generator")); Exit(1); } break;
 
-        case NodeKind_Statement:
-        {
-            GenerateNode(Gen, Node->Expr);
-            GenerateNode(Gen, Node->Next);
-        } break;
-
         case NodeKind_Integer:
         {
             // NOTE(vak):
@@ -395,6 +389,83 @@ local void GenerateNode(generator* Gen, node* Node)
         {
             GenerateBinaryNode(Gen, Node);
         } break; 
+
+        case NodeKind_LogicalAnd:
+        {
+            label* SkipRight = MakeLabel();
+
+            GenerateNode(Gen, Node->Left);
+
+            // NOTE(vak):
+            // 48 85 c0     test rax, rax
+            // 0f 84 REL32  jz .SkipRight
+            GenU40(Gen, 0x840fc08548);
+            FillInRel32(Gen, SkipRight);
+
+            GenerateNode(Gen, Node->Right);
+            PlaceLabelHere(Gen, SkipRight);
+
+            // NOTE(vak):
+            // 48 85 c0     test rax, rax
+            // 0f 95 c0     setnz al
+            // 48 0f b6 c0  movzx rax, al
+            GenU64(Gen, 0x0f48c0950fc08548);
+            GenU16(Gen, 0xc0b6);
+        } break;
+
+        case NodeKind_LogicalOr:
+        {
+            label* SkipRight = MakeLabel();
+
+            GenerateNode(Gen, Node->Left);
+
+            // NOTE(vak):
+            // 48 85 c0     test rax, rax
+            // 0f 85 REL32  jnz SkipRight
+            GenU40(Gen, 0x850fc08548);
+            FillInRel32(Gen, SkipRight);
+
+            GenerateNode(Gen, Node->Right);
+            PlaceLabelHere(Gen, SkipRight);
+
+            // NOTE(vak):
+            // 48 85 c0     test rax, rax
+            // 0f 95 c0     setnz al
+            // 48 0f b6 c0  movzx rax, al
+            GenU64(Gen, 0x0f48c0950fc08548);
+            GenU16(Gen, 0xc0b6);
+        } break;
+
+        case NodeKind_Ternary:
+        {
+            label* Else = MakeLabel();
+            label* SkipElse = MakeLabel();
+
+            GenerateNode(Gen, Node->TernaryCond);
+ 
+            // NOTE(vak):
+            // 48 85 c0     test rax, rax
+            // 0f 84 REL32  jz Else
+            GenU40(Gen, 0x840fc08548);
+            FillInRel32(Gen, Else);
+
+            {
+                GenerateNode(Gen, Node->TernaryIf);
+
+                // NOTE(vak):
+                // e9 REL32     jmp SkipElse
+                GenU8(Gen, 0xe9);
+                FillInRel32(Gen, SkipElse);
+            }
+
+            {
+                PlaceLabelHere(Gen, Else);
+                GenerateNode(Gen, Node->TernaryElse);
+                PlaceLabelHere(Gen, SkipElse);
+            }
+        } break;
     }
+
+    GenerateNode(Gen, Node->Next);
 }
 
