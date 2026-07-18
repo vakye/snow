@@ -86,7 +86,10 @@ local b32 StringIsEqual(string A, string B)
         for (usize Index = 0; Index < A.Size; Index++)
         {
             if (A.Data[Index] != B.Data[Index])
+            {
+                Result = false;
                 break;
+            }
         }
     }
 

@@ -464,6 +464,40 @@ local void GenerateNode(generator* Gen, node* Node)
                 PlaceLabelHere(Gen, SkipElse);
             }
         } break;
+
+        case NodeKind_If:
+        {
+            label* Else = MakeLabel();
+            label* SkipElse = MakeLabel();
+
+            GenerateNode(Gen, Node->IfCond);
+
+            // NOTE(vak):
+            // 48 85 c0     test rax, rax
+            // 0f 84 REL32  jz Else
+            GenU40(Gen, 0x840fc08548);
+            FillInRel32(Gen, Else);
+
+            {
+                GenerateNode(Gen, Node->IfThen);
+            }
+
+            if (Node->IfElse)
+            {
+                // NOTE(vak):
+                // e9 REL32     jmp SkipElse
+                GenU8(Gen, 0xe9);
+                FillInRel32(Gen, SkipElse);
+ 
+                PlaceLabelHere(Gen, Else);
+                GenerateNode(Gen, Node->TernaryElse);
+                PlaceLabelHere(Gen, SkipElse);
+            }
+            else
+            {
+                PlaceLabelHere(Gen, Else);
+            }
+        } break;
     }
 
     GenerateNode(Gen, Node->Next);

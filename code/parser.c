@@ -36,6 +36,7 @@ typedef enum
 
     NodeKind_Ternary,
 
+    NodeKind_If,
     NodeKind_Return,
 } node_kind;
 
@@ -50,6 +51,7 @@ struct node
         struct { node* Left; node* Right; };
         struct { usize Integer; };
         struct { node* TernaryCond; node* TernaryIf; node* TernaryElse; };
+        struct { node* IfCond; node* IfThen; node* IfElse; };
     };
 };
 
@@ -91,6 +93,7 @@ local node* MakeIntegerNode(usize Integer)
     return (Node);
 }
 
+local node* ParseBlock      (token_stream* Stream);
 local node* ParseStatement  (token_stream* Stream);
 local node* ParseExpression (token_stream* Stream);
 local node* ParseTernary    (token_stream* Stream);
@@ -123,6 +126,45 @@ local node* Parse(token_stream* Stream)
     return (First);
 }
 
+local node* ParseBlock(token_stream* Stream)
+{
+    node* First = 0;
+    node* Last = 0;
+
+    if (!MatchAndNextToken(Stream, '{'))
+    {
+        Println(Str("Missing '{' to denote start of block"));
+        Exit(1);
+    }
+
+    while (!NoMoreTokens(Stream))
+    {
+        if (MatchToken(Stream, '}'))
+            break;
+
+        if (!First)
+        {
+            First = ParseStatement(Stream);
+            Last = First;
+        }
+        else
+        {
+            Last->Next = ParseStatement(Stream);
+
+            if (Last->Next)
+                Last = Last->Next;
+        }
+    }
+
+    if (!MatchAndNextToken(Stream, '}'))
+    {
+        Println(Str("Missing '}' to match '{'"));
+        Exit(1);
+    }
+
+    return (First);
+}
+
 local node* ParseStatement(token_stream* Stream)
 {
     node* Node = 0;
@@ -135,6 +177,18 @@ local node* ParseStatement(token_stream* Stream)
         {
             Println(Str("Expected ';' at end of statement"));
             Exit(1);
+        }
+    }
+    else if (MatchStringAndNextToken(Stream, Str("if")))
+    {
+        Node = MakeNode(NodeKind_If);
+
+        Node->IfCond = ParseExpression(Stream);
+        Node->IfThen = ParseBlock(Stream);
+
+        if (MatchStringAndNextToken(Stream, Str("else")))
+        {
+            Node->IfElse = ParseBlock(Stream);
         }
     }
     else
@@ -454,7 +508,7 @@ local node* ParsePrimary(token_stream* Stream)
             Exit(1);
         }
     }
-    else if (MatchToken(Stream, ';'))
+    else if (MatchToken(Stream, ';') || MatchToken(Stream, '{'))
     {
         // NOTE(vak): Ignore
     }

@@ -363,6 +363,19 @@ local void PrintNode(node* Node)
 
             Level--;
         } break;
+
+        case NodeKind_If:
+        {
+            Println(Str("If:"));
+
+            Level++;
+
+            PrintNode(Node->IfCond);
+            PrintNode(Node->IfThen);
+            PrintNode(Node->IfElse);
+
+            Level--;
+        } break;
     }
 
     PrintNode(Node->Next);
@@ -486,6 +499,8 @@ void LinuxEntry(void)
         { 0,            StaticStr("127 - 127 || 33*100 - 3300;") },
         { 2388,         StaticStr("1 ? (10 > 4) ? 2388 : 2814 : 24;") },
         { 20,           StaticStr("0 ? (23 > 6) ? 481276 : 28192857 : (7 < 34) ? 20 : 481;") },
+        { 2334,         StaticStr("if (0) { 10 + 10; } else { 2334; }") },
+        { 10,           StaticStr("if (3 < 4) { 20 - 10; }") },
     };
 
     usize CasesPassed = 0;
