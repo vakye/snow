@@ -18,6 +18,8 @@ typedef enum
 
     TokenKind_DoubleAmpersand,  // NOTE(vak): &&
     TokenKind_DoubleBar,        // NOTE(vak): ||
+
+    TokenKind_ColonEqual,       // NOTE(vak): :=
 } token_kind;
 
 typedef struct
@@ -183,6 +185,8 @@ local token TokenizePunctuation(token_stream* Stream)
 
             MatchToTokenKind('&', '&', TokenKind_DoubleAmpersand)
             MatchToTokenKind('|', '|', TokenKind_DoubleBar)
+
+            MatchToTokenKind(':', '=', TokenKind_ColonEqual)
 
             #undef MatchToTokenKind
         }

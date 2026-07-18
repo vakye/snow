@@ -278,6 +278,21 @@ local void PrintNode(node* Node)
             PrintCharacter('\n');
         } break;
 
+        case NodeKind_Identifier:
+        {
+            Print(Str("Identifier: '"));
+            Print(Node->Identifier);
+            Print(Str("'"));
+            PrintCharacter('\n');
+        } break;
+
+        case NodeKind_Variable:
+        {
+            Print(Str("Variable: StackOffset = "));
+            PrintUSize(Node->StackOffset);
+            PrintCharacter('\n');
+        } break;
+
         case NodeKind_Negate:
         case NodeKind_BitwiseNot:
         case NodeKind_LogicalNot:
@@ -300,6 +315,7 @@ local void PrintNode(node* Node)
             Level--;
         } break;
 
+        case NodeKind_Assign:
         case NodeKind_Add:
         case NodeKind_Sub:
         case NodeKind_Mul:
@@ -323,6 +339,7 @@ local void PrintNode(node* Node)
             {
                 default: {} break;
 
+                case NodeKind_Assign:       Println(Str("Assign:")); break;
                 case NodeKind_Add:          Println(Str("Add:")); break;
                 case NodeKind_Sub:          Println(Str("Sub:")); break;
                 case NodeKind_Mul:          Println(Str("Mul:")); break;
@@ -376,6 +393,15 @@ local void PrintNode(node* Node)
 
             Level--;
         } break;
+
+        case NodeKind_Block:
+        {
+            Println(Str("Block:"));
+
+            Level++;
+            PrintNode(Node->First);
+            Level--;
+        } break;
     }
 
     PrintNode(Node->Next);
@@ -388,15 +414,15 @@ local ssize CompileAndRunDetailed(string Code)
     ResetMemory();
 
     token_stream TokenStream    = MakeTokenStream(Code);
-    node* RootNode              = Parse(&TokenStream);
-    generated Generated         = Generate(RootNode);
+    program Program             = Parse(&TokenStream);
+    generated Generated         = Generate(Program);
 
     Print(Str("\n"));
 
     Println(Str("============================================================================================"));
     Println(Str("AST:"));
     Println(Str("============================================================================================"));
-    PrintNode(RootNode);
+    PrintNode(Program.Root);
 
     Print(Str("\n\n"));
 
@@ -431,8 +457,8 @@ local ssize CompileAndRun(string Code)
     ResetMemory();
 
     token_stream TokenStream    = MakeTokenStream(Code);
-    node* RootNode              = Parse(&TokenStream);
-    generated Generated         = Generate(RootNode);
+    program Program             = Parse(&TokenStream);
+    generated Generated         = Generate(Program);
 
     program_entry* ProgramEntry = (program_entry*)
         MapExecutableMemory(Generated.Code, Generated.Size);
@@ -499,8 +525,16 @@ void LinuxEntry(void)
         { 0,            StaticStr("127 - 127 || 33*100 - 3300;") },
         { 2388,         StaticStr("1 ? (10 > 4) ? 2388 : 2814 : 24;") },
         { 20,           StaticStr("0 ? (23 > 6) ? 481276 : 28192857 : (7 < 34) ? 20 : 481;") },
-        { 2334,         StaticStr("if (0) { 10 + 10; } else { 2334; }") },
-        { 10,           StaticStr("if (3 < 4) { 20 - 10; }") },
+        { 2334,         StaticStr("if 0 { 10 + 10; } else { 2334; }") },
+        { 10,           StaticStr("if 3 < 4 { 20 - 10; }") },
+        { 4187,         StaticStr("if 3 > 4 { 20 - 10; } else if 10 > 4 { 4187; } else 10 + 10;") },
+        { 40,           StaticStr("if 3 > 4 { 20 - 10; } else if 10 > 4 { 4187; } else 10 + 10; 20 + 20;") },
+        { 40,           StaticStr("if 3 > 4 { 20 - 10; } else if 4 > 10 { 4187; } else 10 + 10; 20 + 20;") },
+        { 4187,         StaticStr("if 3 > 4 { 20 - 10; } else if 10 > 4 { 4187; } else { 10 + 10; 20 + 20; }") },
+        { 20,           StaticStr("MyVariable := 40; MyVariable = 20;") },
+        { 40,           StaticStr("MyVariable := 40;") },
+        { 10,           StaticStr("First := 7; Second := 3; First + Second;") },
+        { 5,            StaticStr("adlfj := 4; if (adlfj < 7) { 2 + 3; } else 10;") },
     };
 
     usize CasesPassed = 0;

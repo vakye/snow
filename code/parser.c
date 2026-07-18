@@ -6,6 +6,11 @@ typedef enum
     NodeKind_Nil = 0,
 
     NodeKind_Integer,
+    NodeKind_Identifier,
+    NodeKind_Variable,
+
+    NodeKind_Declare,
+    NodeKind_Assign,
 
     NodeKind_Add,
     NodeKind_Sub,
@@ -36,6 +41,7 @@ typedef enum
 
     NodeKind_Ternary,
 
+    NodeKind_Block,
     NodeKind_If,
     NodeKind_Return,
 } node_kind;
@@ -48,12 +54,215 @@ struct node
 
     union
     {
-        struct { node* Left; node* Right; };
-        struct { usize Integer; };
-        struct { node* TernaryCond; node* TernaryIf; node* TernaryElse; };
-        struct { node* IfCond; node* IfThen; node* IfElse; };
+        struct { node* Left; node* Right; };                                    // NOTE(vak): Unary/Binary
+        struct { usize Integer; };                                              // NOTE(vak): Integer
+        struct { string Identifier; };                                          // NOTE(vak): Identifier
+        struct { usize StackOffset; };                                          // NOTE(vak): Variable
+        struct { node* TernaryCond; node* TernaryIf; node* TernaryElse; };      // NOTE(vak): Ternary conditional
+        struct { node* IfCond; node* IfThen; node* IfElse; };                   // NOTE(vak): If/Else
+        struct { node* First; node* Last; };                                    // NOTE(vak): Block
     };
 };
+
+typedef struct
+{
+    node* Root;
+    usize StackSize;
+} program;
+
+typedef struct symbol symbol;
+struct symbol
+{
+    string Identifier;
+    usize StackOffset;
+    symbol* Next;
+};
+
+typedef struct
+{
+    usize StackOffset;           // NOTE(vak): Current stack offset
+
+    // NOTE(vak): Linked-list stack for variables
+    symbol* First;              // NOTE(vak): First variable
+    symbol* Last;               // NOTE(vak): Last variable
+} symbol_tracker;
+
+local symbol* MakeVariableSymbol(program* Program, symbol_tracker* Tracker, string Identifier)
+{
+    symbol* Result = Allocate(sizeof(symbol));
+
+    Tracker->StackOffset += 8;
+    Program->StackSize = Maximum(Program->StackSize, Tracker->StackOffset);
+
+    Result->Identifier = Identifier;
+    Result->StackOffset = Tracker->StackOffset;
+    Result->Next = 0;
+
+    if (!Tracker->First)
+    {
+        Tracker->First = Result;
+        Tracker->Last = Result;
+    }
+    else
+    {
+        Tracker->Last->Next = Result;
+        Tracker->Last = Result;
+    }
+
+    return (Result);
+}
+
+local symbol* LookupSymbol(symbol_tracker* Tracker, string Identifier)
+{
+    symbol* Result = 0;
+
+    for (
+        symbol* Scan = Tracker->First;
+        Scan;
+        Scan = Scan->Next
+    )
+    {
+        if (StringIsEqual(Scan->Identifier, Identifier))
+        {
+            Result = Scan;
+            break;
+        }
+    }
+
+    return (Result);
+}
+
+local void AnalyzeSymbols(symbol_tracker* Tracker, program* Program, node* Node)
+{
+    if (!Node)
+        return;
+
+    switch (Node->Kind)
+    {
+        default: { Println(Str("Unknown node kind in AnalyzeSymbols()")); Exit(1); } break;
+
+        case NodeKind_Integer:
+        {
+        } break;
+
+        case NodeKind_Block:
+        {
+            symbol* SavedLast = Tracker->Last;
+            usize SavedStack = Tracker->StackOffset;
+
+            AnalyzeSymbols(Tracker, Program, Node->First);
+
+            Tracker->StackOffset = SavedStack;
+
+            if (SavedLast)
+            {
+                SavedLast->Next = 0;
+                Tracker->Last = SavedLast;
+            }
+            else
+            {
+                Tracker->First = 0;
+                Tracker->Last = 0;
+            }
+        } break;
+
+        case NodeKind_Identifier:
+        {
+            symbol* Symbol = LookupSymbol(Tracker, Node->Identifier);
+
+            if (!Symbol)
+            {
+                Print(Str("Use of undeclared identifier '"));
+                Print(Node->Identifier);
+                Print(Str("'\n"));
+                Exit(1);
+            }
+
+            Node->Kind = NodeKind_Variable;
+            Node->StackOffset = Symbol->StackOffset;
+        } break;
+
+        case NodeKind_Declare:
+        {
+            node* Target = Node->Left;
+
+            symbol* Symbol = 0;
+
+            if (Target && (Target->Kind == NodeKind_Identifier))
+            {
+                Symbol = LookupSymbol(Tracker, Target->Identifier);
+
+                if (Symbol)
+                {
+                    Print(Str("Redeclaration of previously declared variable '"));
+                    Print(Target->Identifier);
+                    Print(Str("'\n"));
+                    Exit(1);
+                }
+                else
+                {
+                    Symbol = MakeVariableSymbol(Program, Tracker, Target->Identifier);
+                }
+            }
+            else
+            {
+                Println(Str("Invalid variable name"));
+                Exit(1);
+            }
+
+            Node->Kind = NodeKind_Variable;
+            Node->StackOffset = Symbol->StackOffset;
+        } break;
+
+        case NodeKind_Negate:
+        case NodeKind_BitwiseNot:
+        case NodeKind_LogicalNot:
+        case NodeKind_Return:
+        {
+            AnalyzeSymbols(Tracker, Program, Node->Left);
+        } break;
+
+        case NodeKind_Assign:
+        case NodeKind_Add:
+        case NodeKind_Sub:
+        case NodeKind_Mul:
+        case NodeKind_Div:
+        case NodeKind_Mod:
+        case NodeKind_Equal:
+        case NodeKind_NotEqual:
+        case NodeKind_Less:
+        case NodeKind_Greater:
+        case NodeKind_LessEqual:
+        case NodeKind_GreaterEqual:
+        case NodeKind_ShiftLeft:
+        case NodeKind_ShiftRight:
+        case NodeKind_BitwiseAnd:
+        case NodeKind_BitwiseOr:
+        case NodeKind_BitwiseXor:
+        case NodeKind_LogicalAnd:
+        case NodeKind_LogicalOr:
+        {
+            AnalyzeSymbols(Tracker, Program, Node->Left);
+            AnalyzeSymbols(Tracker, Program, Node->Right);
+        } break;
+
+        case NodeKind_Ternary:
+        {
+            AnalyzeSymbols(Tracker, Program, Node->TernaryCond);
+            AnalyzeSymbols(Tracker, Program, Node->TernaryIf);
+            AnalyzeSymbols(Tracker, Program, Node->TernaryElse);
+        } break;
+
+        case NodeKind_If:
+        {
+            AnalyzeSymbols(Tracker, Program, Node->IfCond);
+            AnalyzeSymbols(Tracker, Program, Node->IfThen);
+            AnalyzeSymbols(Tracker, Program, Node->IfElse);
+        } break;
+    }
+
+    AnalyzeSymbols(Tracker, Program, Node->Next);
+}
 
 local node* MakeNode(node_kind Kind)
 {
@@ -93,9 +302,20 @@ local node* MakeIntegerNode(usize Integer)
     return (Node);
 }
 
+local node* MakeIdentifierNode(string Identifier)
+{
+    node* Node = MakeNode(NodeKind_Identifier);
+
+    Node->Identifier = Identifier;
+
+    return (Node);
+}
+
 local node* ParseBlock      (token_stream* Stream);
 local node* ParseStatement  (token_stream* Stream);
 local node* ParseExpression (token_stream* Stream);
+local node* ParseAssign     (token_stream* Stream);
+local node* ParseDeclare    (token_stream* Stream);
 local node* ParseTernary    (token_stream* Stream);
 local node* ParseLogicalOr  (token_stream* Stream);
 local node* ParseLogicalAnd (token_stream* Stream);
@@ -110,7 +330,14 @@ local node* ParseFactor     (token_stream* Stream);
 local node* ParsePrefix     (token_stream* Stream);
 local node* ParsePrimary    (token_stream* Stream);
 
-local node* Parse(token_stream* Stream)
+local void PostParsePass(program* Program)
+{
+    symbol_tracker SymbolTracker = {0};
+
+    AnalyzeSymbols(&SymbolTracker, Program, Program->Root);
+}
+
+local program Parse(token_stream* Stream)
 {
     node* First = ParseStatement(Stream);
     node* Last = First;
@@ -123,13 +350,19 @@ local node* Parse(token_stream* Stream)
             Last = Last->Next;
     }
 
-    return (First);
+    program Program =
+    {
+        .Root = First,
+    };
+
+    PostParsePass(&Program);
+
+    return (Program);
 }
 
 local node* ParseBlock(token_stream* Stream)
 {
-    node* First = 0;
-    node* Last = 0;
+    node* Block = MakeNode(NodeKind_Block);
 
     if (!MatchAndNextToken(Stream, '{'))
     {
@@ -142,17 +375,17 @@ local node* ParseBlock(token_stream* Stream)
         if (MatchToken(Stream, '}'))
             break;
 
-        if (!First)
+        if (!Block->First)
         {
-            First = ParseStatement(Stream);
-            Last = First;
+            Block->First = ParseStatement(Stream);
+            Block->Last = Block->First;
         }
         else
         {
-            Last->Next = ParseStatement(Stream);
+            Block->Last->Next = ParseStatement(Stream);
 
-            if (Last->Next)
-                Last = Last->Next;
+            if (Block->Last->Next)
+                Block->Last = Block->Last->Next;
         }
     }
 
@@ -162,7 +395,7 @@ local node* ParseBlock(token_stream* Stream)
         Exit(1);
     }
 
-    return (First);
+    return (Block);
 }
 
 local node* ParseStatement(token_stream* Stream)
@@ -188,8 +421,12 @@ local node* ParseStatement(token_stream* Stream)
 
         if (MatchStringAndNextToken(Stream, Str("else")))
         {
-            Node->IfElse = ParseBlock(Stream);
+            Node->IfElse = ParseStatement(Stream);
         }
+    }
+    else if (MatchToken(Stream, '{'))
+    {
+        Node = ParseBlock(Stream);
     }
     else
     {
@@ -207,7 +444,32 @@ local node* ParseStatement(token_stream* Stream)
 
 local node* ParseExpression(token_stream* Stream)
 {
+    node* Node = ParseAssign(Stream);
+    return (Node);
+}
+
+local node* ParseAssign(token_stream* Stream)
+{
+    node* Node = ParseDeclare(Stream);
+
+    if (MatchAndNextToken(Stream, '='))
+    {
+        Node = MakeBinaryNode(NodeKind_Assign, Node, ParseAssign(Stream));
+    }
+
+    return (Node);
+}
+
+local node* ParseDeclare(token_stream* Stream)
+{
     node* Node = ParseTernary(Stream);
+
+    if (MatchAndNextToken(Stream, TokenKind_ColonEqual))
+    {
+        Node = MakeBinaryNode(NodeKind_Declare, Node, 0);
+        Node = MakeBinaryNode(NodeKind_Assign, Node, ParseDeclare(Stream));
+    }
+
     return (Node);
 }
 
@@ -495,6 +757,12 @@ local node* ParsePrimary(token_stream* Stream)
     if (MatchToken(Stream, TokenKind_Integer))
     {
         Node = MakeIntegerNode(GetTokenInteger(Stream, GetCurrentToken(Stream)));
+
+        NextToken(Stream);
+    }
+    else if (MatchToken(Stream, TokenKind_Identifier))
+    {
+        Node = MakeIdentifierNode(GetTokenString(Stream, GetCurrentToken(Stream)));
 
         NextToken(Stream);
     }

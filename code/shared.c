@@ -6,6 +6,9 @@
 
 #define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
 
+#define Minimum(A, B) ((A) < (B) ? (A) : (B))
+#define Maximum(A, B) ((A) > (B) ? (A) : (B))
+
 #define KB(Amount) ((ssize)(Amount) << 10)
 #define MB(Amount) ((ssize)(Amount) << 20)
 #define GB(Amount) ((ssize)(Amount) << 30)

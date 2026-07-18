@@ -87,7 +87,7 @@ local void FillInRel32(generator* Gen, label* Target)
 
 local void GenerateNode(generator* Gen, node* Node);
 
-local generated Generate(node* RootNode)
+local generated Generate(program Program)
 {
     generator Gen = {0};
 
@@ -108,7 +108,21 @@ local generated Generate(node* RootNode)
         // 48 8b ec     mov rbp, rsp
         GenU32(&Gen, 0xec8b4855);
 
-        GenerateNode(&Gen, RootNode);
+        if (Program.StackSize)
+        {
+            if (Program.StackSize > S32Max)
+            {
+                Println(Str("Stack is too large"));
+                Exit(1);
+            }
+
+            // NOTE(vak):
+            // 48 81 ec Imm32(StackSize)    sub rsp, StackSize
+            GenU24(&Gen, 0xec8148);
+            GenU32(&Gen, (s32)Program.StackSize);
+        }
+
+        GenerateNode(&Gen, Program.Root);
 
         PlaceLabelHere(&Gen, Gen.ReturnLabel);
         // NOTE(vak):
@@ -152,6 +166,25 @@ local generated Generate(node* RootNode)
     Result.Size = Gen.At;
 
     return (Result);
+}
+
+local void GenerateAddress(generator* Gen, node* Node)
+{
+    switch (Node->Kind)
+    {
+        default: { Println(Str("Not a value associated with an address")); Exit(1); } break;
+
+        case NodeKind_Variable:
+        {
+            // NOTE(vak):
+            // 48 8d 85 (Disp32)    lea rax, [rbp + Disp32]
+
+            s32 Displacement = -(s32)Node->StackOffset;
+
+            GenU24(Gen, 0x858d48);
+            GenU32(Gen, Displacement);
+        } break;
+    }
 }
 
 local void GenerateUnaryNode(generator* Gen, node* Node)
@@ -362,6 +395,30 @@ local void GenerateNode(generator* Gen, node* Node)
             GenU64(Gen, Node->Integer);
         } break;
 
+        case NodeKind_Variable:
+        {
+            GenerateAddress(Gen, Node);
+
+            // NOTE(vak):
+            // 48 8b 00     mov rax, [rax]
+            GenU24(Gen, 0x008b48);
+        } break;
+
+        case NodeKind_Assign:
+        {
+            GenerateAddress(Gen, Node->Left);
+
+            GenU8(Gen, 0x50); // NOTE(vak): push rax
+
+            GenerateNode(Gen, Node->Right);
+
+            GenU8(Gen, 0x59); // NOTE(vak): pop rcx
+
+            // NOTE(vak):
+            // 48 89 01     mov [rcx], rax
+            GenU24(Gen, 0x018948);
+        } break;
+
         case NodeKind_Negate:
         case NodeKind_BitwiseNot:
         case NodeKind_LogicalNot:
@@ -497,6 +554,11 @@ local void GenerateNode(generator* Gen, node* Node)
             {
                 PlaceLabelHere(Gen, Else);
             }
+        } break;
+
+        case NodeKind_Block:
+        {
+            GenerateNode(Gen, Node->First);
         } break;
     }
 
